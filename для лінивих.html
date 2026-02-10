@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>TBX Pro Editor - CROWDIN READY</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f0f2f5; font-size: 16px; }
+        .header { background: #1a2a3a; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
+        .container { padding: 20px; }
+        .table-container { background: white; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); overflow: auto; max-height: 85vh; }
+        table { border-collapse: collapse; width: auto; table-layout: fixed; }
+        th { background: #2c3e50; color: white; border: 1px solid #3e4f5f; padding: 12px; text-align: center; position: sticky; top: 0; font-size: 14px; }
+        td { border: 1px solid #dfe6e9; padding: 12px; vertical-align: top; background: #fff; font-size: 17px; line-height: 1.5; }
+        .id-col { width: 80px; text-align: center; font-weight: bold; background: #f8f9fa; color: #7f8c8d; }
+        .term-box { border: 2px solid #d1d8e0; border-radius: 6px; margin-bottom: 10px; padding: 10px; background: #fafafa; position: relative; }
+        .term-type { font-size: 11px; color: #2980b9; font-weight: bold; text-transform: uppercase; display: block; border-bottom: 1px solid #eee; margin-bottom: 5px; }
+        .btn-group { display: flex; gap: 8px; margin-top: 8px; }
+        .add-btn { background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; padding: 6px 12px; font-weight: bold; }
+        .del-btn { background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; padding: 0 8px; position: absolute; top: 5px; right: 5px; }
+        .add-entry-btn { background: #f39c12; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-right: 10px; }
+        [contenteditable] { outline: none; padding: 5px; min-height: 25px; display: block; word-break: break-word; white-space: pre-wrap; border-bottom: 1px dashed #ccc; }
+        [contenteditable]:focus { background: #fffde7; border-bottom: 1px solid #3498db; }
+        .url-box { color: #0984e3; font-family: monospace; font-size: 14px; border: 1px solid #ddd; padding: 6px; background: #f9f9f9; width: 100%; box-sizing: border-box; }
+        select { padding: 5px; border-radius: 4px; border: 1px solid #ccc; width: 100%; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div style="font-weight: bold; font-size: 22px;">TBX Pro (Crowdin Ready)</div>
+    <div>
+        <button class="add-entry-btn" onclick="addNewEntry()">+ ДОДАТИ НОВИЙ ТЕРМІН</button>
+        <input type="file" id="fileInput" accept=".tbx">
+        <button onclick="exportTBX()" style="background: #27ae60; color: white; border: none; padding: 12px 30px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 16px;">ЗБЕРЕГТИ ДЛЯ CROWDIN</button>
+    </div>
+</div>
+
+<div class="container">
+    <div class="table-container">
+        <table id="table">
+            <thead>
+                <tr>
+                    <th rowspan="2" class="id-col">ID</th>
+                    <th colspan="2" style="background:#444">Concept</th>
+                    <th colspan="3" style="background:#2980b9">ENGLISH (EN)</th>
+                    <th colspan="3" style="background:#8e44ad">UKRAINIAN (UK)</th>
+                </tr>
+                <tr>
+                    <th style="width:110px">Subject</th>
+                    <th style="width:110px">Transl.</th>
+                    <th style="width:300px">Terms</th>
+                    <th style="width:400px">Context</th>
+                    <th style="width:200px">URL</th>
+                    <th style="width:300px">Terms</th>
+                    <th style="width:400px">Context</th>
+                    <th style="width:200px">URL</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+let xmlDoc = null;
+
+// Створення порожнього документа, якщо файл не завантажено
+function initEmptyDoc() {
+    const parser = new DOMParser();
+    const emptyTbx = `<?xml version="1.0" encoding="UTF-8"?><tbx type="TBX-Basic" style="dca" xml:lang="en" xmlns="urn:iso:std:iso:30042:ed-2"><text><body></body></text></tbx>`;
+    xmlDoc = parser.parseFromString(emptyTbx, "application/xml");
+}
+initEmptyDoc();
+
+document.getElementById("fileInput").addEventListener("change", function(e) {
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        const parser = new DOMParser();
+        xmlDoc = parser.parseFromString(evt.target.result, "application/xml");
+        renderTable();
+    };
+    reader.readAsText(e.target.files[0], "UTF-8");
+});
+
+function addNewEntry() {
+    const body = xmlDoc.getElementsByTagName("body")[0];
+    const newEntry = xmlDoc.createElement("conceptEntry");
+    const newId = "c" + (xmlDoc.getElementsByTagName("conceptEntry").length + 1);
+    newEntry.setAttribute("id", newId);
+    body.appendChild(newEntry);
+    renderTable();
+}
+
+function renderTable() {
+    const tbody = document.getElementById("tableBody");
+    tbody.innerHTML = "";
+    const entries = Array.from(xmlDoc.getElementsByTagName("conceptEntry"));
+
+    entries.forEach(entry => {
+        const tr = document.createElement("tr");
+        
+        // ID
+        const idTd = document.createElement("td"); idTd.className = "id-col";
+        idTd.textContent = entry.getAttribute("id") || '';
+        tr.appendChild(idTd);
+
+        // Subject
+        tr.appendChild(createCell(entry, "descrip", "subjectField"));
+        
+        // Translatable (Dropdown)
+        tr.appendChild(createSelectCell(entry, "descrip", "translatable"));
+
+        ["en", "uk"].forEach(lang => {
+            let langSec = Array.from(entry.getElementsByTagName("langSec")).find(ls => ls.getAttribute("xml:lang") === lang);
+            if (!langSec) {
+                langSec = xmlDoc.createElement("langSec");
+                langSec.setAttribute("xml:lang", lang);
+                entry.appendChild(langSec);
+            }
+
+            const tdTerms = document.createElement("td");
+            const termContainer = document.createElement("div");
+            const refreshTerms = () => {
+                termContainer.innerHTML = "";
+                Array.from(langSec.getElementsByTagName("termSec")).forEach(ts => {
+                    const termNode = ts.getElementsByTagName("term")[0];
+                    const typeNote = ts.getElementsByTagName("termNote")[0];
+                    const div = document.createElement("div");
+                    div.className = "term-box";
+                    div.innerHTML = `<button class="del-btn">×</button><span class="term-type">${typeNote ? typeNote.textContent : 'entryTerm'}</span><div contenteditable="true">${termNode ? termNode.textContent : ""}</div>`;
+                    div.querySelector(".del-btn").onclick = () => { ts.remove(); div.remove(); };
+                    div.querySelector("div[contenteditable]").oninput = (e) => { if(termNode) termNode.textContent = e.target.textContent; };
+                    termContainer.appendChild(div);
+                });
+            };
+            refreshTerms();
+            tdTerms.appendChild(termContainer);
+
+            const btnG = document.createElement("div"); btnG.className = "btn-group";
+            const add = (l, t) => {
+                const b = document.createElement("button"); b.className="add-btn"; b.textContent="+ "+l;
+                b.onclick = () => { addTermNode(langSec, t); refreshTerms(); }; return b;
+            };
+            btnG.appendChild(add("Abbr", "abbreviation"));
+            btnG.appendChild(add("Var", "variant"));
+            tdTerms.appendChild(btnG);
+            tr.appendChild(tdTerms);
+
+            const firstTs = langSec.getElementsByTagName("termSec")[0];
+            tr.appendChild(createCell(firstTs, "descrip", "context"));
+            tr.appendChild(createXrefCell(firstTs));
+        });
+        tbody.appendChild(tr);
+    });
+}
+
+function createSelectCell(parent, tag, type) {
+    const td = document.createElement("td");
+    let node = Array.from(parent.children).find(n => n.localName === tag && n.getAttribute("type") === type);
+    const sel = document.createElement("select");
+    const options = ["yes", "no"];
+    options.forEach(optVal => {
+        const opt = document.createElement("option");
+        opt.value = optVal;
+        opt.textContent = optVal.toUpperCase();
+        if (node && node.textContent.toLowerCase() === optVal) opt.selected = true;
+        sel.appendChild(opt);
+    });
+    
+    // Якщо вузла немає, створюємо його з дефолтним 'yes'
+    if (!node) {
+        node = xmlDoc.createElement(tag);
+        node.setAttribute("type", type);
+        node.textContent = "yes";
+        parent.appendChild(node);
+    }
+
+    sel.onchange = () => { node.textContent = sel.value; };
+    td.appendChild(sel);
+    return td;
+}
+
+function createCell(parent, tag, type) {
+    const td = document.createElement("td");
+    if (!parent) return td;
+    let node = Array.from(parent.children).find(n => n.localName === tag && n.getAttribute("type") === type);
+    const edit = document.createElement("div"); edit.contentEditable = true; edit.textContent = node ? node.textContent : "";
+    edit.oninput = () => {
+        if (!node) { node = xmlDoc.createElement(tag); node.setAttribute("type", type); parent.appendChild(node); }
+        node.textContent = edit.textContent;
+    };
+    td.appendChild(edit); return td;
+}
+
+function createXrefCell(ts) {
+    const td = document.createElement("td");
+    if (!ts) return td;
+    let xref = Array.from(ts.children).find(n => n.localName === "xref");
+    const edit = document.createElement("div"); edit.className="url-box"; edit.contentEditable = true;
+    edit.textContent = xref ? xref.getAttribute("target") : "";
+    edit.oninput = () => {
+        if (!xref) { xref = xmlDoc.createElement("xref"); xref.setAttribute("type", "externalCrossReference"); ts.appendChild(xref); }
+        xref.setAttribute("target", edit.textContent);
+    };
+    td.appendChild(edit); return td;
+}
+
+function addTermNode(langSec, type) {
+    const ts = xmlDoc.createElement("termSec");
+    const t = xmlDoc.createElement("term"); t.textContent = "NEW";
+    const tn = xmlDoc.createElement("termNote"); tn.setAttribute("type", "termType"); tn.textContent = type;
+    ts.appendChild(t); ts.appendChild(tn); langSec.appendChild(ts);
+}
+
+function exportTBX() {
+    if (!xmlDoc) return;
+    const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const getVal = (entry, type) => {
+        const node = Array.from(entry.children).find(c => c.getAttribute('type') === type);
+        return node ? esc(node.textContent) : '';
+    };
+
+    let o = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<tbx type="TBX-Basic" style="dca" xml:lang="en" xmlns="urn:iso:std:iso:30042:ed-2">\n' +
+    '    <tbxHeader>\n        <fileDesc>\n            <sourceDesc>\n                <p>Crowdin Enterprise glossary download</p>\n            </sourceDesc>\n        </fileDesc>\n    </tbxHeader>\n' +
+    '    <text>\n        <body>\n';
+
+    Array.from(xmlDoc.getElementsByTagName("conceptEntry")).forEach(entry => {
+        o += `            <conceptEntry id="${entry.getAttribute('id') || 'c'+Date.now()}">\n`;
+        const tVal = getVal(entry, "translatable");
+        const sVal = getVal(entry, "subjectField");
+        if(tVal) o += `                <descrip type="translatable">${tVal}</descrip>\n`;
+        if(sVal) o += `                <descrip type="subjectField">${sVal}</descrip>\n`;
+
+        Array.from(entry.getElementsByTagName("langSec")).forEach(ls => {
+            o += `                <langSec xml:lang="${ls.getAttribute('xml:lang')}">\n`;
+            Array.from(ls.getElementsByTagName("termSec")).forEach(ts => {
+                o += `                    <termSec>\n`;
+                const term = ts.getElementsByTagName('term')[0];
+                if(term) o += `                        <term id="t${Date.now()}">${esc(term.textContent)}</term>\n`;
+                const ctx = Array.from(ts.children).find(c => c.getAttribute('type') === 'context');
+                if(ctx) o += `                        <descrip type="context">${esc(ctx.textContent)}</descrip>\n`;
+                const note = ts.getElementsByTagName('termNote')[0];
+                if(note) o += `                        <termNote type="termType">${esc(note.textContent)}</termNote>\n`;
+                const xref = ts.getElementsByTagName('xref')[0];
+                if(xref) o += `                        <xref type="externalCrossReference" target="${esc(xref.getAttribute('target') || '')}"></xref>\n`;
+                o += `                    </termSec>\n`;
+            });
+            o += `                </langSec>\n`;
+        });
+        o += `            </conceptEntry>\n`;
+    });
+
+    o += '        </body>\n    </text>\n</tbx>';
+    const blob = new Blob([o], { type: "application/xml" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = "glossary_crowdin_fix.tbx"; a.click();
+}
+</script>
+</body>
+</html>
